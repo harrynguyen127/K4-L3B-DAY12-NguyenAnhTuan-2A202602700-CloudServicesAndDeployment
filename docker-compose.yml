@@ -35,10 +35,46 @@ services:
       timeout: 3s
       retries: 5
 
-  # TODO (CP2): khai báo service `agent` ở đây
-  # agent:
-  #   build: .
-  #   ...
+  agent:
+    build: .
+    # Tên image cho dễ nhận diện khi chạy `docker images`
+    image: day12-agent:local
+    ports:
+      - "8000:8000"
+    environment:
+      # Secret KHÔNG viết thẳng ở đây: compose nội suy từ file .env cùng thư mục
+      AGENT_API_KEY: ${AGENT_API_KEY}
+      # Trong compose, tên service chính là hostname -> `redis`, không phải localhost
+      REDIS_URL: redis://redis:6379/0
+      PORT: 8000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-10}
+      MONTHLY_BUDGET_USD: ${MONTHLY_BUDGET_USD:-10.0}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      # Image runtime là python:3.11-slim, không có curl -> gọi bằng urllib
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+  nginx:
+    image: nginx:alpine
+    profiles: ["lb"]
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - agent
+    restart: unless-stopped
 
 volumes:
   redis-data:
