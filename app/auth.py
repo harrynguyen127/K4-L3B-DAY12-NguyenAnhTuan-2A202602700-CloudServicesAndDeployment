@@ -34,4 +34,16 @@ def verify_api_key(
 
     Gợi ý: dùng ``status.HTTP_401_UNAUTHORIZED`` cho dễ đọc.
     """
-    raise NotImplementedError("TODO (CP3): cài đặt verify_api_key")
+    expected = get_settings().agent_api_key
+
+    # Thiếu header và sai khóa trả về CÙNG một lỗi: không tiết lộ cho người
+    # gọi biết họ sai ở bước nào. compare_digest cần str nên chặn None trước.
+    if x_api_key is None or not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid or missing API key",
+        )
+
+    # user_id là đơn vị để rate limit và tính chi phí; client không gửi thì
+    # gom chung vào một người dùng ẩn danh.
+    return x_user_id or ANONYMOUS_USER
